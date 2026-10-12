@@ -1,0 +1,1064 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teachable Machine Dino Runner</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Press Start 2P for retro feel & Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <!-- TensorFlow.js & Teachable Machine Image Library -->
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8.3/dist/teachablemachine-image.min.js"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        .font-pixel {
+            font-family: 'Press Start 2P', monospace;
+        }
+        canvas {
+            image-rendering: pixelated;
+        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1f2937;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #4b5563;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="bg-slate-900 text-slate-100 min-h-screen flex flex-col justify-between selection:bg-indigo-500 selection:text-white">
+
+    <!-- Navigation Header -->
+    <header class="bg-slate-800/80 backdrop-blur border-b border-slate-700 sticky top-0 z-50 px-4 py-3">
+        <div class="max-w-7xl mx-auto flex flex-wrap justify-between items-center gap-4">
+            <div class="flex items-center gap-3">
+                <div class="p-2 bg-indigo-600 rounded-lg shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-dragon text-xl text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-lg font-bold bg-gradient-to-r from-indigo-400 to-cyan-400 bg-clip-text text-transparent">
+                        Teachable Machine Dino Game
+                    </h1>
+                    <p class="text-xs text-slate-400">AI 控制的 Chrome 恐龍跳躍遊戲</p>
+                </div>
+            </div>
+
+            <!-- Controls Header Right -->
+            <div class="flex items-center gap-3 text-xs">
+                <button id="toggle-sound-btn" class="px-3 py-1.5 rounded-lg bg-slate-700 hover:bg-slate-600 transition flex items-center gap-2 border border-slate-600">
+                    <i id="sound-icon" class="fa-solid fa-volume-high text-indigo-400"></i>
+                    <span id="sound-text">音效: 開</span>
+                </button>
+                <button id="help-modal-btn" class="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 transition flex items-center gap-2 font-medium">
+                    <i class="fa-solid fa-circle-question"></i>
+                    <span>使用說明</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Container -->
+    <main class="max-w-7xl mx-auto w-full px-4 py-6 flex-grow grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left Column: Teachable Machine & Camera Settings (5 cols) -->
+        <section class="lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- Model URL Setup Card -->
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl">
+                <h2 class="text-base font-semibold mb-3 flex items-center gap-2 text-indigo-300">
+                    <i class="fa-solid fa-link"></i> 載入 Teachable Machine 模型
+                </h2>
+                
+                <!-- Updated Game Gesture Instruction Banner -->
+                <div class="mb-4 p-3 bg-indigo-950/60 border border-indigo-500/30 rounded-xl text-xs text-indigo-200">
+                    <div class="font-bold text-indigo-300 mb-1 flex items-center gap-1.5">
+                        <i class="fa-solid fa-hand text-indigo-400"></i> 手勢控制說明：
+                    </div>
+                    <ul class="space-y-1 ml-1 text-slate-300">
+                        <li><span class="text-emerald-400 font-bold">✌️ 比出手勢 2</span> ：即可 <strong class="text-emerald-300">跳躍 (jump)</strong></li>
+                        <li><span class="text-amber-400 font-bold">🖐️ 比出手勢 5</span> ：即可 <strong class="text-amber-300">蹲下 (down)</strong></li>
+                        <li><span class="text-sky-400 font-bold">✊ 一般狀態/手勢 0</span> ：前進 <strong class="text-sky-300">(default)</strong></li>
+                    </ul>
+                </div>
+
+                <p class="text-xs text-slate-400 mb-4 leading-relaxed">
+                    請輸入你訓練好的 Image Model 網址 (包含三個類別: <code class="bg-slate-900 px-1 py-0.5 rounded text-indigo-300">jump</code>, <code class="bg-slate-900 px-1 py-0.5 rounded text-indigo-300">down</code>, <code class="bg-slate-900 px-1 py-0.5 rounded text-indigo-300">default</code>)。
+                </p>
+
+                <div class="flex flex-col gap-3">
+                    <div class="relative">
+                        <input type="text" id="model-url-input" 
+                               placeholder="https://teachablemachine.withgoogle.com/models/XXXXX/" 
+                               class="w-full bg-slate-900 border border-slate-600 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl px-3.5 py-2.5 text-xs text-slate-200 placeholder-slate-500 outline-none transition">
+                        <button id="clear-url-btn" class="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 text-xs">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+
+                    <div class="flex items-center gap-2">
+                        <button id="load-model-btn" class="flex-1 bg-indigo-600 hover:bg-indigo-500 active:bg-indigo-700 text-white font-medium py-2.5 px-4 rounded-xl transition text-xs flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/20">
+                            <i class="fa-solid fa-camera-rotate"></i> 載入模型並開啟攝影機
+                        </button>
+                        <button id="demo-model-btn" title="帶入示範提示" class="bg-slate-700 hover:bg-slate-600 text-slate-300 py-2.5 px-3 rounded-xl transition text-xs">
+                            <i class="fa-solid fa-wand-magic-sparkles"></i> 範例
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Model Status Banner -->
+                <div id="model-status" class="mt-4 p-3 rounded-xl bg-slate-900/60 border border-slate-700/50 text-xs text-slate-400 flex items-center gap-2">
+                    <span class="inline-block w-2.5 h-2.5 rounded-full bg-amber-500 animate-pulse" id="status-dot"></span>
+                    <span id="status-text">等待輸入模型網址...</span>
+                </div>
+            </div>
+
+            <!-- Webcam Preview & Class Probabilities -->
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl flex flex-col flex-grow">
+                <div class="flex justify-between items-center mb-3">
+                    <h2 class="text-base font-semibold flex items-center gap-2 text-indigo-300">
+                        <i class="fa-solid fa-video"></i> 攝影機與手勢辨識狀態
+                    </h2>
+                    <!-- Action Badge Status -->
+                    <span id="action-badge" class="px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-700 text-slate-300 border border-slate-600">
+                        OFFLINE
+                    </span>
+                </div>
+
+                <!-- Webcam Video Container -->
+                <div class="relative w-full aspect-video bg-slate-950 rounded-xl overflow-hidden border border-slate-700/80 mb-4 flex items-center justify-center shadow-inner group">
+                    <div id="webcam-container" class="w-full h-full flex items-center justify-center">
+                        <div id="webcam-placeholder" class="text-center p-6">
+                            <i class="fa-solid fa-camera text-4xl text-slate-600 mb-2"></i>
+                            <p class="text-xs text-slate-500">模型載入後將在此顯示鏡頭畫面</p>
+                        </div>
+                    </div>
+
+                    <!-- Overlay Trigger Flash -->
+                    <div id="action-overlay" class="absolute inset-0 pointer-events-none transition-all duration-150 opacity-0 bg-indigo-500/20"></div>
+                </div>
+
+                <!-- Probability Bar Gauges -->
+                <div class="space-y-3 mt-auto">
+                    <!-- Jump Class Gauge -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-semibold text-emerald-400 flex items-center gap-1.5">
+                                ✌️ JUMP (手勢 2 - 跳躍)
+                            </span>
+                            <span id="score-jump" class="font-mono text-slate-300">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-700">
+                            <div id="bar-jump" class="bg-emerald-500 h-full w-0 transition-all duration-75 rounded-full"></div>
+                        </div>
+                    </div>
+
+                    <!-- Down Class Gauge -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-semibold text-amber-400 flex items-center gap-1.5">
+                                🖐️ DOWN (手勢 5 - 蹲下)
+                            </span>
+                            <span id="score-down" class="font-mono text-slate-300">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-700">
+                            <div id="bar-down" class="bg-amber-500 h-full w-0 transition-all duration-75 rounded-full"></div>
+                        </div>
+                    </div>
+
+                    <!-- Default Class Gauge -->
+                    <div>
+                        <div class="flex justify-between text-xs mb-1">
+                            <span class="font-semibold text-sky-400 flex items-center gap-1.5">
+                                ✊ DEFAULT (手勢 0 - 前進)
+                            </span>
+                            <span id="score-default" class="font-mono text-slate-300">0%</span>
+                        </div>
+                        <div class="w-full bg-slate-900 rounded-full h-2.5 overflow-hidden border border-slate-700">
+                            <div id="bar-default" class="bg-sky-500 h-full w-0 transition-all duration-75 rounded-full"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- Right Column: Game Display Canvas & Controls (7 cols) -->
+        <section class="lg:col-span-7 flex flex-col">
+            <div class="bg-slate-800 border border-slate-700 rounded-2xl p-5 shadow-xl flex flex-col h-full">
+                
+                <!-- Game Header Info -->
+                <div class="flex flex-wrap justify-between items-center gap-2 mb-4">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <span class="px-2.5 py-1 bg-indigo-500/10 border border-indigo-500/30 text-indigo-400 rounded-lg text-xs font-mono">
+                            <i class="fa-solid fa-gamepad mr-1"></i> CANVAS GAME
+                        </span>
+                        <span id="environment-indicator" class="text-xs text-slate-400 bg-slate-900/60 px-2.5 py-1 rounded-lg border border-slate-700">
+                            🌞 日間模式
+                        </span>
+
+                        <!-- Speed Selector -->
+                        <div class="flex items-center gap-1.5 bg-slate-900/80 border border-slate-700 rounded-lg px-2 py-0.5 text-xs">
+                            <i class="fa-solid fa-gauge-high text-indigo-400"></i>
+                            <span class="text-slate-400 text-[11px]">速度:</span>
+                            <select id="speed-multiplier-select" class="bg-transparent text-indigo-300 font-semibold outline-none cursor-pointer">
+                                <option value="0.75" class="bg-slate-800 text-slate-200">0.75x (輕鬆)</option>
+                                <option value="1.0" selected class="bg-slate-800 text-slate-200">1.0x (標準)</option>
+                                <option value="1.25" class="bg-slate-800 text-slate-200">1.25x (挑戰)</option>
+                                <option value="1.5" class="bg-slate-800 text-slate-200">1.5x (極速)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Scores -->
+                    <div class="flex items-center gap-4 font-pixel text-xs">
+                        <div class="text-slate-400">HI <span id="high-score-display" class="text-slate-200">00000</span></div>
+                        <div class="text-indigo-400">SCORE <span id="current-score-display" class="text-indigo-300">00000</span></div>
+                    </div>
+                </div>
+
+                <!-- Canvas Game Viewport Area -->
+                <div id="canvas-container" class="relative w-full aspect-[2/1] bg-slate-950 rounded-xl overflow-hidden border border-slate-700 shadow-2xl flex items-center justify-center">
+                    <canvas id="game-canvas" width="800" height="400" class="w-full h-full block bg-slate-950"></canvas>
+
+                    <!-- Game Overlay Messages (Start / Game Over) -->
+                    <div id="game-overlay" class="absolute inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-6 text-center z-10 transition-opacity">
+                        <div id="overlay-start-content" class="flex flex-col items-center">
+                            <i class="fa-solid fa-play text-5xl text-indigo-400 mb-4 animate-bounce"></i>
+                            <h3 class="font-pixel text-lg text-slate-100 mb-2">準備好開始了嗎？</h3>
+                            <p class="text-xs text-slate-400 mb-6 max-w-md">載入 Teachable Machine 模型後，或直接點擊下方按鈕以鍵盤控制 (空白鍵跳躍 / 方向鍵下蹲下)。</p>
+                            <button id="start-game-btn" class="font-pixel text-xs bg-indigo-600 hover:bg-indigo-500 text-white py-3 px-6 rounded-xl transition shadow-lg shadow-indigo-500/30 active:scale-95">
+                                START GAME
+                            </button>
+                        </div>
+
+                        <div id="overlay-gameover-content" class="hidden flex-col items-center">
+                            <i class="fa-solid fa-skull text-5xl text-rose-500 mb-3 animate-pulse"></i>
+                            <h3 class="font-pixel text-xl text-rose-400 mb-2">GAME OVER</h3>
+                            <p id="gameover-reason" class="text-xs text-slate-400 mb-4">你撞到了障礙物！</p>
+                            <p class="font-pixel text-xs text-indigo-300 mb-6">FINAL SCORE: <span id="final-score-text">00000</span></p>
+                            <button id="restart-game-btn" class="font-pixel text-xs bg-emerald-600 hover:bg-emerald-500 text-white py-3 px-6 rounded-xl transition shadow-lg shadow-emerald-600/30 active:scale-95 flex items-center gap-2">
+                                <i class="fa-solid fa-rotate-right"></i> RESTART (SPACE)
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Keyboard Alternative & Mobile Controls -->
+                <div class="mt-4 p-4 bg-slate-900/80 rounded-xl border border-slate-700/60 flex flex-wrap items-center justify-between gap-3 text-xs">
+                    <div class="text-slate-400 flex items-center gap-2">
+                        <i class="fa-solid fa-keyboard text-slate-500 text-base"></i>
+                        <span>備用鍵盤操作: <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-indigo-300">Space</kbd> 跳躍 / <kbd class="px-1.5 py-0.5 bg-slate-800 border border-slate-600 rounded text-amber-300">↓</kbd> 蹲下</span>
+                    </div>
+
+                    <!-- Action Touch Buttons for testing -->
+                    <div class="flex items-center gap-2">
+                        <button id="touch-jump-btn" class="px-3 py-1.5 bg-emerald-600/30 hover:bg-emerald-600/50 border border-emerald-500/40 text-emerald-300 rounded-lg text-xs font-semibold active:bg-emerald-600">
+                            跳躍 (Jump)
+                        </button>
+                        <button id="touch-down-btn" class="px-3 py-1.5 bg-amber-600/30 hover:bg-amber-600/50 border border-amber-500/40 text-amber-300 rounded-lg text-xs font-semibold active:bg-amber-600">
+                            蹲下 (Down)
+                        </button>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Instructions Modal -->
+    <div id="instructions-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 hidden items-center justify-center p-4">
+        <div class="bg-slate-800 border border-slate-700 rounded-2xl max-w-lg w-full p-6 shadow-2xl relative">
+            <button id="close-modal-btn" class="absolute top-4 right-4 text-slate-400 hover:text-slate-200">
+                <i class="fa-solid fa-xmark text-lg"></i>
+            </button>
+            <h3 class="text-lg font-bold text-indigo-300 mb-4 flex items-center gap-2">
+                <i class="fa-solid fa-book-open"></i> 如何訓練與設定手勢 AI 模型？
+            </h3>
+            
+            <ol class="space-y-3 text-xs text-slate-300 list-decimal list-inside leading-relaxed">
+                <li class="p-2 bg-slate-900/60 rounded-lg">
+                    前往 <a href="https://teachablemachine.withgoogle.com/" target="_blank" class="text-indigo-400 underline font-semibold">Teachable Machine</a>，選擇 **Image Project**。
+                </li>
+                <li class="p-2 bg-slate-900/60 rounded-lg">
+                    建立以下 <strong class="text-indigo-300">三個 Class (類別)</strong>，名稱與手勢對應如下：
+                    <ul class="mt-1 ml-4 list-disc text-slate-400 space-y-1">
+                        <li><code class="text-emerald-400 font-bold">jump</code>：錄製比出 <strong class="text-emerald-300">✌️ 手勢 2</strong> (控制恐龍跳躍)</li>
+                        <li><code class="text-amber-400 font-bold">down</code>：錄製比出 <strong class="text-amber-300">🖐️ 手勢 5</strong> (控制恐龍蹲下)</li>
+                        <li><code class="text-sky-400 font-bold">default</code>：錄製一般自然姿勢或 <strong class="text-sky-300">✊ 握拳/手勢 0</strong> (正常前進)</li>
+                    </ul>
+                </li>
+                <li class="p-2 bg-slate-900/60 rounded-lg">
+                    每個類別錄製約 50~100 張影像後，點擊 **Train Model** 進行訓練。
+                </li>
+                <li class="p-2 bg-slate-900/60 rounded-lg">
+                    訓練完成後點擊 **Export Model** &rarr; 選擇 **Upload (shareable link)** 產生模型連結。
+                </li>
+                <li class="p-2 bg-slate-900/60 rounded-lg">
+                    複製該網址貼入本網頁輸入框，並點擊「載入模型」即可用 **手勢 2 (跳躍)** 與 **手勢 5 (蹲下)** 開始玩遊戲！
+                </li>
+            </ol>
+
+            <button id="modal-ok-btn" class="mt-5 w-full bg-indigo-600 hover:bg-indigo-500 text-white font-medium py-2.5 rounded-xl transition text-xs">
+                我明白了！
+            </button>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-slate-900 border-t border-slate-800 py-3 text-center text-xs text-slate-500">
+        Teachable Machine x HTML5 Canvas Dino Runner &copy; 2026
+    </footer>
+
+    <script>
+        /* ------------------------------------------------------------------
+         * 1. AUDIO SYNTHESIZER (Web Audio API)
+         * ------------------------------------------------------------------ */
+        class SoundEngine {
+            constructor() {
+                this.enabled = true;
+                this.ctx = null;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioCtx();
+                }
+            }
+
+            playJump() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(150, now);
+                osc.frequency.exponentialRampToValueAtTime(600, now + 0.12);
+
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.12);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.12);
+            }
+
+            playDuck() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(120, now + 0.1);
+
+                gain.gain.setValueAtTime(0.15, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.1);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.1);
+            }
+
+            playScoreMilestone() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const notes = [523.25, 659.25, 783.99, 1046.50]; // C5, E5, G5, C6
+                notes.forEach((freq, index) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+                    osc.type = 'sine';
+                    osc.frequency.value = freq;
+                    gain.gain.setValueAtTime(0.12, now + index * 0.06);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + index * 0.06 + 0.08);
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+                    osc.start(now + index * 0.06);
+                    osc.stop(now + index * 0.06 + 0.08);
+                });
+            }
+
+            playGameOver() {
+                if (!this.enabled) return;
+                this.init();
+                const now = this.ctx.currentTime;
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(220, now);
+                osc.frequency.exponentialRampToValueAtTime(60, now + 0.35);
+
+                gain.gain.setValueAtTime(0.25, now);
+                gain.gain.linearRampToValueAtTime(0.01, now + 0.35);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.35);
+            }
+        }
+
+        const soundEngine = new SoundEngine();
+
+        /* ------------------------------------------------------------------
+         * 2. CANVAS GAME ENGINE
+         * ------------------------------------------------------------------ */
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+
+        // Game Configuration
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 400;
+        const GROUND_Y = 320;
+        const BASE_SPEED = 3.5; // Decreased from 6.5 for smoother webcam control
+
+        let speedMultiplier = 1.0;
+
+        let gameState = {
+            isRunning: false,
+            isGameOver: false,
+            score: 0,
+            highScore: localStorage.getItem('tm_dino_highscore') || 0,
+            baseSpeed: BASE_SPEED,
+            speed: BASE_SPEED,
+            milestoneCount: 0,
+            isNightMode: false
+        };
+
+        // Dinosaur State
+        const dino = {
+            x: 80,
+            y: GROUND_Y - 60,
+            normalWidth: 44,
+            normalHeight: 60,
+            duckWidth: 60,
+            duckHeight: 34,
+            width: 44,
+            height: 60,
+            vy: 0,
+            gravity: 0.6,
+            jumpForce: -12.5,
+            isGrounded: true,
+            isDucking: false,
+            animFrame: 0,
+            animTimer: 0,
+
+            reset() {
+                this.y = GROUND_Y - this.normalHeight;
+                this.width = this.normalWidth;
+                this.height = this.normalHeight;
+                this.vy = 0;
+                this.isGrounded = true;
+                this.isDucking = false;
+            },
+
+            jump() {
+                if (this.isGrounded && !this.isDucking) {
+                    this.vy = this.jumpForce;
+                    this.isGrounded = false;
+                    soundEngine.playJump();
+                }
+            },
+
+            setDuck(ducking) {
+                if (ducking && !this.isDucking) {
+                    this.isDucking = true;
+                    this.width = this.duckWidth;
+                    this.height = this.duckHeight;
+                    if (this.isGrounded) {
+                        this.y = GROUND_Y - this.duckHeight;
+                    }
+                    soundEngine.playDuck();
+                } else if (!ducking && this.isDucking) {
+                    this.isDucking = false;
+                    this.width = this.normalWidth;
+                    this.height = this.normalHeight;
+                    if (this.isGrounded) {
+                        this.y = GROUND_Y - this.normalHeight;
+                    }
+                }
+            },
+
+            update() {
+                // Apply Gravity
+                if (!this.isGrounded) {
+                    this.vy += this.gravity;
+                    this.y += this.vy;
+
+                    const currentHeight = this.isDucking ? this.duckHeight : this.normalHeight;
+                    if (this.y >= GROUND_Y - currentHeight) {
+                        this.y = GROUND_Y - currentHeight;
+                        this.vy = 0;
+                        this.isGrounded = true;
+                    }
+                }
+
+                // Leg animation timer
+                this.animTimer++;
+                if (this.animTimer % 8 === 0) {
+                    this.animFrame = (this.animFrame + 1) % 2;
+                }
+            },
+
+            draw(ctx) {
+                ctx.save();
+                ctx.fillStyle = gameState.isNightMode ? '#38bdf8' : '#4f46e5';
+
+                if (this.isDucking) {
+                    // Crouching Dino
+                    ctx.fillRect(this.x, this.y + 10, this.width - 10, this.height - 10);
+                    // Dino Head forward
+                    ctx.fillRect(this.x + this.width - 16, this.y, 16, 20);
+                    // Eye
+                    ctx.fillStyle = gameState.isNightMode ? '#0f172a' : '#ffffff';
+                    ctx.fillRect(this.x + this.width - 8, this.y + 4, 4, 4);
+
+                    // Legs animation
+                    ctx.fillStyle = gameState.isNightMode ? '#38bdf8' : '#4f46e5';
+                    if (this.isGrounded) {
+                        if (this.animFrame === 0) {
+                            ctx.fillRect(this.x + 10, this.y + this.height - 4, 8, 4);
+                            ctx.fillRect(this.x + 30, this.y + this.height - 8, 8, 4);
+                        } else {
+                            ctx.fillRect(this.x + 10, this.y + this.height - 8, 8, 4);
+                            ctx.fillRect(this.x + 30, this.y + this.height - 4, 8, 4);
+                        }
+                    }
+                } else {
+                    // Upright Dino Body
+                    ctx.fillRect(this.x + 10, this.y + 16, 24, 32);
+                    // Head
+                    ctx.fillRect(this.x + 18, this.y, 24, 20);
+                    // Snout
+                    ctx.fillRect(this.x + 28, this.y + 6, 14, 12);
+                    // Eye
+                    ctx.fillStyle = gameState.isNightMode ? '#0f172a' : '#ffffff';
+                    ctx.fillRect(this.x + 32, this.y + 4, 4, 4);
+                    // Tail
+                    ctx.fillStyle = gameState.isNightMode ? '#38bdf8' : '#4f46e5';
+                    ctx.fillRect(this.x, this.y + 20, 10, 12);
+
+                    // Legs
+                    if (this.isGrounded) {
+                        if (this.animFrame === 0) {
+                            ctx.fillRect(this.x + 12, this.y + 48, 6, 12);
+                            ctx.fillRect(this.x + 24, this.y + 48, 6, 8);
+                        } else {
+                            ctx.fillRect(this.x + 12, this.y + 48, 6, 8);
+                            ctx.fillRect(this.x + 24, this.y + 48, 6, 12);
+                        }
+                    } else {
+                        // In air
+                        ctx.fillRect(this.x + 14,  this.y + 48, 6, 8);
+                        ctx.fillRect(this.x + 22, this.y + 48, 6, 8);
+                    }
+                }
+
+                ctx.restore();
+            }
+        };
+
+        // Obstacles System
+        let obstacles = [];
+        let obstacleTimer = 0;
+
+        class Cactus {
+            constructor(x, speed) {
+                this.x = x;
+                this.speed = speed;
+                this.type = 'cactus';
+                const isLarge = Math.random() > 0.5;
+                this.width = isLarge ? 26 : 18;
+                this.height = isLarge ? 50 : 38;
+                this.y = GROUND_Y - this.height;
+            }
+
+            update() {
+                this.x -= this.speed;
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.fillStyle = gameState.isNightMode ? '#34d399' : '#059669';
+                // Main stem
+                ctx.fillRect(this.x + this.width*0.3, this.y, this.width*0.4, this.height);
+                // Arms
+                ctx.fillRect(this.x, this.y + this.height*0.3, this.width, this.height*0.2);
+                ctx.fillRect(this.x, this.y + this.height*0.15, this.width*0.3, this.height*0.35);
+                ctx.fillRect(this.x + this.width*0.7, this.y + this.height*0.2, this.width*0.3, this.height*0.3);
+                ctx.restore();
+            }
+        }
+
+        class Pterodactyl {
+            constructor(x, speed) {
+                this.x = x;
+                this.speed = speed;
+                this.type = 'pterodactyl';
+                this.width = 46;
+                this.height = 30;
+                // High flying (must duck) or Low flying (must jump)
+                const isHigh = Math.random() > 0.4;
+                this.y = isHigh ? GROUND_Y - 62 : GROUND_Y - 32;
+                this.wingFrame = 0;
+                this.timer = 0;
+            }
+
+            update() {
+                this.x -= this.speed + 0.8;
+                this.timer++;
+                if (this.timer % 12 === 0) {
+                    this.wingFrame = (this.wingFrame + 1) % 2;
+                }
+            }
+
+            draw(ctx) {
+                ctx.save();
+                ctx.fillStyle = gameState.isNightMode ? '#f43f5e' : '#e11d48';
+                // Body & Beak
+                ctx.fillRect(this.x + 10, this.y + 10, 24, 12);
+                ctx.fillRect(this.x, this.y + 12, 10, 6); // Head/Beak
+                // Wings animation
+                if (this.wingFrame === 0) {
+                    ctx.fillRect(this.x + 16, this.y - 10, 10, 20); // Wing Up
+                } else {
+                    ctx.fillRect(this.x + 16, this.y + 14, 10, 16); // Wing Down
+                }
+                ctx.restore();
+            }
+        }
+
+        function spawnObstacles() {
+            obstacleTimer++;
+            const currentEffectiveSpeed = gameState.speed * speedMultiplier;
+            const minInterval = Math.max(70, Math.floor(180 - currentEffectiveSpeed * 12));
+
+            if (obstacleTimer > minInterval) {
+                if (Math.random() < 0.75 || gameState.score < 120) {
+                    obstacles.push(new Cactus(CANVAS_WIDTH + 20, currentEffectiveSpeed));
+                } else {
+                    obstacles.push(new Pterodactyl(CANVAS_WIDTH + 20, currentEffectiveSpeed));
+                }
+                obstacleTimer = 0;
+            }
+        }
+
+        // Ground & Background Stars
+        let groundOffset = 0;
+        const stars = Array.from({ length: 25 }, () => ({
+            x: Math.random() * CANVAS_WIDTH,
+            y: Math.random() * (GROUND_Y - 100),
+            size: Math.random() * 2 + 1
+        }));
+
+        function drawEnvironment() {
+            // Background fill
+            ctx.fillStyle = gameState.isNightMode ? '#0f172a' : '#f8fafc';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            // Stars in Night Mode
+            if (gameState.isNightMode) {
+                ctx.fillStyle = '#94a3b8';
+                stars.forEach(star => {
+                    ctx.fillRect(star.x, star.y, star.size, star.size);
+                });
+            }
+
+            // Horizon Line
+            ctx.strokeStyle = gameState.isNightMode ? '#475569' : '#cbd5e1';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, GROUND_Y);
+            ctx.lineTo(CANVAS_WIDTH, GROUND_Y);
+            ctx.stroke();
+
+            // Ground bump dots
+            const currentEffectiveSpeed = gameState.speed * speedMultiplier;
+            groundOffset = (groundOffset + currentEffectiveSpeed) % 40;
+            ctx.fillStyle = gameState.isNightMode ? '#475569' : '#94a3b8';
+            for (let x = -groundOffset; x < CANVAS_WIDTH; x += 40) {
+                ctx.fillRect(x, GROUND_Y + 8, 12, 2);
+                ctx.fillRect(x + 22, GROUND_Y + 18, 6, 2);
+            }
+        }
+
+        function checkCollisions() {
+            for (let obs of obstacles) {
+                // Hitbox shrinking for forgiving gameplay
+                const padding = 6;
+                if (
+                    dino.x + padding < obs.x + obs.width - padding &&
+                    dino.x + dino.width - padding > obs.x + padding &&
+                    dino.y + padding < obs.y + obs.height - padding &&
+                    dino.y + dino.height - padding > obs.y + padding
+                ) {
+                    triggerGameOver(obs.type === 'pterodactyl' ? '你撞到了翼龍！' : '你撞到了仙人掌！');
+                    return;
+                }
+            }
+        }
+
+        function gameLoop() {
+            if (!gameState.isRunning) return;
+
+            // Clear & Draw BG
+            drawEnvironment();
+
+            // Update & Draw Dino
+            dino.update();
+            dino.draw(ctx);
+
+            // Obstacles
+            spawnObstacles();
+            for (let i = obstacles.length - 1; i >= 0; i--) {
+                obstacles[i].speed = gameState.speed * speedMultiplier;
+                obstacles[i].update();
+                obstacles[i].draw(ctx);
+                if (obstacles[i].x + obstacles[i].width < -20) {
+                    obstacles.splice(i, 1);
+                }
+            }
+
+            // Check Collision
+            checkCollisions();
+
+            // Score & Speed scaling (Gentle curve for lower base speed)
+            gameState.score += 0.15;
+            const scoreInt = Math.floor(gameState.score);
+            document.getElementById('current-score-display').innerText = String(scoreInt).padStart(5, '0');
+
+            // Gentle speed up every 100 points
+            if (scoreInt > 0 && scoreInt % 100 === 0) {
+                const milestone = Math.floor(scoreInt / 100);
+                if (milestone > gameState.milestoneCount) {
+                    gameState.milestoneCount = milestone;
+                    gameState.speed += 0.25; // Gentler speed increase
+                    soundEngine.playScoreMilestone();
+
+                    // Toggle day/night every 200 pts
+                    if (scoreInt % 200 === 0) {
+                        gameState.isNightMode = !gameState.isNightMode;
+                        document.getElementById('environment-indicator').innerText = gameState.isNightMode ? '🌙 夜間模式' : '🌞 日間模式';
+                    }
+                }
+            }
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            gameState.isRunning = true;
+            gameState.isGameOver = false;
+            gameState.score = 0;
+            gameState.baseSpeed = BASE_SPEED;
+            gameState.speed = BASE_SPEED;
+            gameState.milestoneCount = 0;
+            gameState.isNightMode = false;
+            obstacles = [];
+            obstacleTimer = 0;
+            dino.reset();
+
+            document.getElementById('environment-indicator').innerText = '🌞 日間模式';
+            document.getElementById('game-overlay').classList.add('opacity-0', 'pointer-events-none');
+            document.getElementById('overlay-start-content').classList.add('hidden');
+            document.getElementById('overlay-gameover-content').classList.add('hidden');
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function triggerGameOver(reason) {
+            gameState.isRunning = false;
+            gameState.isGameOver = true;
+            soundEngine.playGameOver();
+
+            const finalScore = Math.floor(gameState.score);
+            if (finalScore > gameState.highScore) {
+                gameState.highScore = finalScore;
+                localStorage.setItem('tm_dino_highscore', finalScore);
+            }
+
+            document.getElementById('high-score-display').innerText = String(gameState.highScore).padStart(5, '0');
+            document.getElementById('final-score-text').innerText = String(finalScore).padStart(5, '0');
+            document.getElementById('gameover-reason').innerText = reason;
+
+            document.getElementById('game-overlay').classList.remove('opacity-0', 'pointer-events-none');
+            document.getElementById('overlay-gameover-content').classList.remove('hidden');
+            document.getElementById('overlay-gameover-content').classList.add('flex');
+        }
+
+        // Speed Multiplier Listener
+        document.getElementById('speed-multiplier-select').addEventListener('change', (e) => {
+            speedMultiplier = parseFloat(e.target.value);
+        });
+
+        // Initialize HighScore Display
+        document.getElementById('high-score-display').innerText = String(gameState.highScore).padStart(5, '0');
+
+        /* ------------------------------------------------------------------
+         * 3. TEACHABLE MACHINE INTEGRATION
+         * ------------------------------------------------------------------ */
+        let model, webcam, maxPredictions;
+        let isModelLoading = false;
+
+        async function loadTeachableMachineModel(rawUrl) {
+            if (isModelLoading) return;
+            
+            // Format URL properly
+            let URL = rawUrl.trim();
+            if (!URL.endsWith('/')) {
+                URL += '/';
+            }
+            const modelURL = URL + 'model.json';
+            const metadataURL = URL + 'metadata.json';
+
+            updateModelStatus('loading', '載入模型中，請稍候...');
+
+            try {
+                isModelLoading = true;
+                // Load model and metadata
+                model = await tmImage.load(modelURL, metadataURL);
+                maxPredictions = model.getTotalClasses();
+
+                // Setup Webcam
+                updateModelStatus('loading', '模型載入成功！正在啟動攝影機...');
+                const flip = true;
+                webcam = new tmImage.Webcam(280, 280, flip);
+                await webcam.setup();
+                await webcam.play();
+
+                // Clear placeholder and mount webcam canvas
+                const container = document.getElementById('webcam-container');
+                container.innerHTML = '';
+                container.appendChild(webcam.canvas);
+                webcam.canvas.className = 'w-full h-full object-cover rounded-xl';
+
+                updateModelStatus('success', 'AI 辨識運作中');
+                document.getElementById('action-badge').innerText = 'ACTIVE';
+                document.getElementById('action-badge').className = 'px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 animate-pulse';
+
+                // Start prediction loop
+                window.requestAnimationFrame(predictLoop);
+
+                // Auto start game if not running
+                if (!gameState.isRunning && !gameState.isGameOver) {
+                    startGame();
+                }
+
+            } catch (error) {
+                console.error(error);
+                updateModelStatus('error', '無法載入模型。請確認 URL 正確且含有 jump, down, default 類別');
+                document.getElementById('action-badge').innerText = 'ERROR';
+                document.getElementById('action-badge').className = 'px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-rose-500/20 text-rose-400 border border-rose-500/30';
+            } finally {
+                isModelLoading = false;
+            }
+        }
+
+        async function predictLoop() {
+            if (webcam) {
+                webcam.update();
+                await predict();
+                window.requestAnimationFrame(predictLoop);
+            }
+        }
+
+        async function predict() {
+            if (!model || !webcam) return;
+            const prediction = await model.predict(webcam.canvas);
+
+            let scores = { jump: 0, down: 0, default: 0 };
+
+            for (let i = 0; i < prediction.length; i++) {
+                const className = prediction[i].className.toLowerCase().trim();
+                const probability = prediction[i].probability;
+
+                if (className === 'jump') scores.jump = probability;
+                else if (className === 'down') scores.down = probability;
+                else if (className === 'default') scores.default = probability;
+            }
+
+            // Update Probability Bars
+            updateGaugeBar('jump', scores.jump);
+            updateGaugeBar('down', scores.down);
+            updateGaugeBar('default', scores.default);
+
+            // Action Trigger Threshold
+            const THRESHOLD = 0.70;
+
+            if (scores.jump > THRESHOLD && scores.jump > scores.down) {
+                triggerAction('jump');
+            } else if (scores.down > THRESHOLD && scores.down > scores.jump) {
+                triggerAction('down');
+            } else {
+                triggerAction('default');
+            }
+        }
+
+        function updateGaugeBar(key, value) {
+            const percent = Math.round(value * 100);
+            document.getElementById(`score-${key}`).innerText = `${percent}%`;
+            document.getElementById(`bar-${key}`).style.width = `${percent}%`;
+        }
+
+        let activeAction = 'default';
+
+        function triggerAction(action) {
+            const overlay = document.getElementById('action-overlay');
+
+            if (action === 'jump') {
+                if (gameState.isRunning) {
+                    // Continuous High-Frequency Jump trigger
+                    dino.jump();
+                }
+                if (activeAction !== 'jump') {
+                    overlay.className = 'absolute inset-0 pointer-events-none transition-all duration-150 opacity-100 bg-emerald-500/20';
+                    setTimeout(() => overlay.classList.add('opacity-0'), 150);
+                }
+            } else if (action === 'down') {
+                if (gameState.isRunning) {
+                    // Hold ducking state while down class is active
+                    dino.setDuck(true);
+                }
+                if (activeAction !== 'down') {
+                    overlay.className = 'absolute inset-0 pointer-events-none transition-all duration-150 opacity-100 bg-amber-500/20';
+                    setTimeout(() => overlay.classList.add('opacity-0'), 150);
+                }
+            } else {
+                // Default running state
+                if (gameState.isRunning) {
+                    dino.setDuck(false);
+                }
+            }
+
+            activeAction = action;
+        }
+
+        function updateModelStatus(type, message) {
+            const statusDot = document.getElementById('status-dot');
+            const statusText = document.getElementById('status-text');
+
+            statusText.innerText = message;
+
+            if (type === 'loading') {
+                statusDot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping';
+            } else if (type === 'success') {
+                statusDot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-emerald-400';
+            } else if (type === 'error') {
+                statusDot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-rose-500';
+            } else {
+                statusDot.className = 'inline-block w-2.5 h-2.5 rounded-full bg-slate-500';
+            }
+        }
+
+        /* ------------------------------------------------------------------
+         * 4. USER INTERACTION & EVENT LISTENERS
+         * ------------------------------------------------------------------ */
+        // Load Model Button
+        document.getElementById('load-model-btn').addEventListener('click', () => {
+            const inputUrl = document.getElementById('model-url-input').value;
+            if (!inputUrl) {
+                alert('請輸入 Teachable Machine 模型網址！');
+                return;
+            }
+            loadTeachableMachineModel(inputUrl);
+        });
+
+        // Demo Model Button
+        document.getElementById('demo-model-btn').addEventListener('click', () => {
+            document.getElementById('model-url-input').value = 'https://teachablemachine.withgoogle.com/models/v_A4Y2E4-/';
+            alert('已為您填入示範網址範本！點擊「載入模型」即可嘗試。');
+        });
+
+        // Clear Input
+        document.getElementById('clear-url-btn').addEventListener('click', () => {
+            document.getElementById('model-url-input').value = '';
+        });
+
+        // Start / Restart Game Buttons
+        document.getElementById('start-game-btn').addEventListener('click', startGame);
+        document.getElementById('restart-game-btn').addEventListener('click', startGame);
+
+        // Sound Toggle
+        document.getElementById('toggle-sound-btn').addEventListener('click', () => {
+            soundEngine.enabled = !soundEngine.enabled;
+            const icon = document.getElementById('sound-icon');
+            const text = document.getElementById('sound-text');
+            if (soundEngine.enabled) {
+                icon.className = 'fa-solid fa-volume-high text-indigo-400';
+                text.innerText = '音效: 開';
+            } else {
+                icon.className = 'fa-solid fa-volume-xmark text-slate-500';
+                text.innerText = '音效: 關';
+            }
+        });
+
+        // Instructions Modal
+        const helpModal = document.getElementById('instructions-modal');
+        document.getElementById('help-modal-btn').addEventListener('click', () => helpModal.classList.remove('hidden'), helpModal.classList.add('flex'));
+        document.getElementById('close-modal-btn').addEventListener('click', () => helpModal.classList.add('hidden'), helpModal.classList.remove('flex'));
+        document.getElementById('modal-ok-btn').addEventListener('click', () => helpModal.classList.add('hidden'), helpModal.classList.remove('flex'));
+
+        // Keyboard Controls
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' || e.code === 'ArrowUp') {
+                e.preventDefault();
+                if (!gameState.isRunning && gameState.isGameOver) {
+                    startGame();
+                } else if (gameState.isRunning) {
+                    dino.jump();
+                }
+            } else if (e.code === 'ArrowDown') {
+                e.preventDefault();
+                if (gameState.isRunning) {
+                    dino.setDuck(true);
+                }
+            }
+        });
+
+        window.addEventListener('keyup', (e) => {
+            if (e.code === 'ArrowDown') {
+                if (gameState.isRunning) {
+                    dino.setDuck(false);
+                }
+            }
+        });
+
+        // Touch Control Buttons
+        const touchJumpBtn = document.getElementById('touch-jump-btn');
+        const touchDownBtn = document.getElementById('touch-down-btn');
+
+        touchJumpBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameState.isRunning) dino.jump(); });
+        touchJumpBtn.addEventListener('mousedown', () => { if (gameState.isRunning) dino.jump(); });
+
+        touchDownBtn.addEventListener('touchstart', (e) => { e.preventDefault(); if (gameState.isRunning) dino.setDuck(true); });
+        touchDownBtn.addEventListener('touchend', (e) => { e.preventDefault(); if (gameState.isRunning) dino.setDuck(false); });
+        touchDownBtn.addEventListener('mousedown', () => { if (gameState.isRunning) dino.setDuck(true); });
+        touchDownBtn.addEventListener('mouseup', () => { if (gameState.isRunning) dino.setDuck(false); });
+
+    </script>
+</body>
+</html>
